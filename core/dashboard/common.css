@@ -1,0 +1,146 @@
+* { font-family: 'Inter', sans-serif; }
+body { overflow-x: hidden; }
+
+/* Smooth sidebar animation */
+.sidebar { 
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: transform;
+}
+
+/* Overlay animation */
+.overlay-transition {
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+@keyframes fadeIn { 
+    from { opacity: 0; transform: translateY(10px); } 
+    to { opacity: 1; transform: translateY(0); } 
+}
+.fade-in { animation: fadeIn 0.5s ease-out; }
+
+/* Non-interactive cards */
+.stat-card { 
+    pointer-events: none; 
+    user-select: none;
+    transition: transform 0.2s ease;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg-primary); }
+::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }
+
+/* Loading animation */
+.loader { 
+    border: 3px solid var(--border-color); 
+    border-top: 3px solid #9333ea; 
+    border-radius: 50%; 
+    width: 50px; 
+    height: 50px; 
+    animation: spin 1s linear infinite; 
+}
+@keyframes spin { 
+    0% { transform: rotate(0deg); } 
+    100% { transform: rotate(360deg); } 
+}
+
+/* Page transitions */
+.page-transition { 
+    opacity: 0; 
+    transform: translateY(20px); 
+    transition: opacity 0.3s ease, transform 0.3s ease; 
+}
+.page-transition.active { 
+    opacity: 1; 
+    transform: translateY(0); 
+}
+
+/* Theme Variables - Solid black theme */
+:root {
+    --bg-primary: #000000;
+    --bg-secondary: #121212;
+    --bg-card: #1e1e1e;
+    --text-primary: #ffffff;
+    --text-secondary: #b3b3b3;
+    --border-color: #2e2e2e;
+    --border-hover: #3e3e3e;
+    --shadow: rgba(0, 0, 0, 0.3);
+}
+
+body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.bg-primary { background-color: var(--bg-primary); }
+.bg-secondary { background-color: var(--bg-secondary); }
+.bg-card { background-color: var(--bg-card); }
+.text-primary { color: var(--text-primary); }
+.text-secondary { color: var(--text-secondary); }
+.border-custom { border-color: var(--border-color); }
+
+/* Google-style shadows */
+.card-shadow {
+    box-shadow: 0 1px 3px var(--shadow);
+}
+.card-shadow:hover {
+    box-shadow: 0 4px 8px var(--shadow);
+}
+
+/* Token card animation */
+.token-card {
+    transition: all 0.3s ease;
+}
+.token-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px var(--shadow);
+}
+
+/* Button styles - Google Material */
+.btn-primary {
+    background: linear-gradient(135deg, #9333ea 0%, #7928ca 100%);
+    transition: all 0.2s ease;
+}
+.btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(147, 51, 234, 0.4);
+}
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+/* Enhanced animations */
+@keyframes slideInRight {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideOutRight {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(100%); opacity: 0; }
+}
+
+.slide-in { animation: slideInRight 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+.slide-out { animation: slideOutRight 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+
+/* CodeMirror Custom Styles for Mobile and Professional Look */
+.CodeMirror {
+    height: 100%;
+    font-size: 14px;
+    border: none;
+}
+
+.CodeMirror-scroll {
+    min-height: 300px;
+    max-height: calc(80vh - 100px);
+}
+
+@media (max-width: 768px) {
+    .CodeMirror {
+        font-size: 16px; /* Larger font for mobile */
+    }
+    button {
+        padding: 12px 16px; /* Larger buttons for touch */
+    }
+}

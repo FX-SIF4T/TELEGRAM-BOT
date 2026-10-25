@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Esha Bot management dashboard">
+    <meta name="theme-color" content="#f4f6f1">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Esha Bot Management</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='46' fill='%231ba97b'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/dashboard.css">
+</head>
+<body class="dashboard-page">
+    <div id="loader" class="dashboard-loader" role="status" aria-live="polite">
+        <span class="dashboard-loader-spinner" aria-hidden="true"></span>
+        <p>Loading management page…</p>
+    </div>
+
+    <div class="ri-dashboard">
+        <header class="ri-topbar">
+            <div class="ri-topbar-inner">
+                <a class="ri-brand" href="/dashboard.html" aria-label="Esha Bot dashboard">
+                    <span class="ri-brand-mark" aria-hidden="true"><i class="fas fa-robot"></i></span>
+                    <span>Esha <b>Bot</b></span>
+                </a>
+
+                <nav class="ri-desktop-nav" aria-label="Management">
+                    <a class="ri-nav-link nav-link" href="/dashboard.html" data-page="dashboard">
+                        <i class="fas fa-house" aria-hidden="true"></i><span>Dashboard</span>
+                    </a>
+                    <a class="ri-nav-link nav-link" href="/commands.html" data-page="commands">
+                        <i class="fas fa-terminal" aria-hidden="true"></i><span>Commands</span>
+                    </a>
+                    <a class="ri-nav-link nav-link" href="/events.html" data-page="events">
+                        <i class="fas fa-bolt" aria-hidden="true"></i><span>Events</span>
+                    </a>
+                    <a class="ri-nav-link nav-link" href="/tokens.html" data-page="tokens">
+                        <i class="fas fa-key" aria-hidden="true"></i><span>Bot Tokens</span>
+                    </a>
+                </nav>
+
+            </div>
+        </header>
+
+        <main id="mainContent" class="ri-main" aria-labelledby="pageTitle"></main>
+
+        <nav class="ri-mobile-nav" aria-label="Management">
+            <a class="ri-mobile-nav-item nav-link" href="/dashboard.html" data-page="dashboard">
+                <i class="fas fa-house" aria-hidden="true"></i><span>Dashboard</span>
+            </a>
+            <a class="ri-mobile-nav-item nav-link" href="/commands.html" data-page="commands">
+                <i class="fas fa-terminal" aria-hidden="true"></i><span>Commands</span>
+            </a>
+            <a class="ri-mobile-nav-item nav-link" href="/events.html" data-page="events">
+                <i class="fas fa-bolt" aria-hidden="true"></i><span>Events</span>
+            </a>
+            <a class="ri-mobile-nav-item nav-link" href="/tokens.html" data-page="tokens">
+                <i class="fas fa-key" aria-hidden="true"></i><span>Tokens</span>
+            </a>
+        </nav>
+    </div>
+
+    <script src="/common.js"></script>
+    <script>
+        const page = window.location.pathname.replace(/\.html$/, '').replace('/', '') || 'dashboard';
+        const pageDetails = {
+            dashboard: { title: 'Dashboard', eyebrow: 'YOUR WORKSPACE', note: 'Telegram bot overview' },
+            commands: { title: 'Commands', eyebrow: 'BOT LIBRARY', note: 'Browse and search registered commands' },
+            events: { title: 'Events', eyebrow: 'AUTOMATIONS', note: 'See the event handlers currently loaded' },
+            tokens: { title: 'Bot Tokens', eyebrow: 'BOT INSTANCES', note: 'Manage connected Telegram bots' }
+        };
+
+        async function requestJson(url, options = {}) {
+            const response = await fetch(url, options);
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                const error = new Error(data.error || `Request failed (${response.status}).`);
+                error.status = response.status;
+                throw error;
+            }
+            return data;
+        }
+
+        function renderHeading({ title, eyebrow, note, count }) {
+            const safeCount = Number.isFinite(Number(count)) ? Number(count) : null;
+            return `
+                <div class="ri-page-heading">
+                    <div>
+                        <p class="ri-eyebrow">${escapeHtml(eyebrow)}</p>
+                        <h1 id="pageTitle">${escapeHtml(title)}</h1>
+                    </div>
+                    <span class="ri-date-note">${safeCount === null ? escapeHtml(note) : `${safeCount} ${safeCount === 1 ? 'item' : 'items'} loaded`}</span>
+                </div>
+            `;
+        }
+
+        function convertTime(ms) {
+            const sec = Math.floor((ms / 1000) % 60);
+            const min = Math.floor((ms / (1000 * 60)) % 60);
+            const hr = Math.floor((ms / (1000 * 60 * 60)) % 24);
+            const days = Math.floor(ms / (1000 * 60 * 60 * 24));
+            return `${days}d ${hr}h ${min}m ${sec}s`;
+        }
+
+        async function renderDashboard() {
+            const content = document.getElementById('mainContent');
+            const settings = botData?.settings || {};
+            const botCount = Number(botData?.botCount) || 0;
+            const commandCount = Number(botData?.commandCount) || 0;
+            const eventCount = Number(botData?.eventCount) || 0;
+            const activeBots = Number(botData?.activeBotCount) || 0;
+            const memory = botData?.memory || {};
+            const memoryPercent = Math.max(0, Math.min(100, Number(memory.usedPercent) || 0));
+            const botHealthPercent = botCount ? Math.round((activeBots / botCount) * 100) : 0;
+            const healthLabel = botCount && activeBots === botCount ? 'Healthy' : 'Needs attention';
+            const formatBytes = value => {
+                const bytes = Number(value) || 0;
+                if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+                if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
+                return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+            };
+            const memoryUsed = formatBytes(memory.usedBytes);
+            const memoryTotal = formatBytes(memory.totalBytes);
+            const prefix = escapeHtml(String(settings.prefix ?? '.'));
+            const developer = escapeHtml(String(settings.developer || 'N/A'));
+            const timezone = escapeHtml(String(settings.timezone || 'UTC'));
+            const uptime = escapeHtml(String(botData?.uptime?.human || '0d 0h'));
+
+            content.innerHTML = `
+                <div class="ri-page-heading">
+                    <div>
+                        <p class="ri-eyebrow">YOUR WORKSPACE</p>
+                        <h1 id="pageTitle">Dashboard</h1>
+                    </div>
+                    <span class="ri-date-note">Telegram bot overview</span>
+                </div>
+
+                <section class="ri-profile-card" aria-labelledby="ri-bot-title">
+                    <div class="ri-profile-orbit" aria-hidden="true"></div>
+                    <div class="ri-bot-avatar" aria-hidden="true">
+                        <i class="fas fa-robot"></i>
+                        <span class="ri-avatar-spark"><i class="fas fa-sparkles"></i></span>
+                    </div>
+                    <div class="ri-profile-copy">
+                        <span class="ri-profile-kicker">BOT PROFILE</span>
+                        <h2 id="ri-bot-title">Esha Bot</h2>
+                        <p>Manage your Telegram bot with ease</p>
+                    </div>
+                    <div class="ri-profile-actions">
+                        <span class="ri-online-pill${activeBots ? '' : ' offline'}"><i></i>${activeBots ? 'Online' : 'Offline'}</span>
+                        <span class="ri-profile-meta">Developer <b>${developer}</b></span>
+                    </div>
+                </section>
+
+                <section class="ri-metrics" aria-label="Dashboard counts">
+                    <article class="ri-metric mint">
+                        <span class="ri-metric-icon" aria-hidden="true"><i class="fas fa-robot"></i></span>
+                        <div class="ri-metric-copy"><strong>${botCount}</strong><span>Active Bots</span></div>
+                        <span class="ri-metric-mark" aria-hidden="true"></span>
+                    </article>
+                    <article class="ri-metric lilac">
+                        <span class="ri-metric-icon" aria-hidden="true"><i class="fas fa-terminal"></i></span>
+                        <div class="ri-metric-copy"><strong>${commandCount}</strong><span>Commands</span></div>
+                        <span class="ri-metric-mark" aria-hidden="true"></span>
+                    </article>
+                    <article class="ri-metric peach">
+                        <span class="ri-metric-icon" aria-hidden="true"><i class="fas fa-bolt"></i></span>
+                        <div class="ri-metric-copy"><strong>${eventCount}</strong><span>Events</span></div>
+                        <span class="ri-metric-mark" aria-hidden="true"></span>
+                    </article>
+                    <article class="ri-metric lemon">
+                        <span class="ri-metric-icon" aria-hidden="true"><i class="fas fa-clock"></i></span>
+                        <div class="ri-metric-copy"><strong id="uptimeDisplay">${uptime}</strong><span>Uptime</span></div>
+                        <span class="ri-metric-mark" aria-hidden="true"></span>
+                    </article>
+                </section>
+
+                <section class="ri-section" aria-labelledby="ri-management-title">
+                    <div class="ri-section-heading">
+                        <div>
+                            <p class="ri-eyebrow">QUICK ACCESS</p>
+                            <h2 id="ri-management-title">Management</h2>
+                        </div>
+                        <span class="ri-section-note">Your bot, at a glance</span>
+                    </div>
+                    <div class="ri-shortcuts">
+                        <a class="ri-shortcut shortcut-0 nav-link" href="/dashboard.html" data-page="dashboard">
+                            <span class="ri-shortcut-icon"><i class="fas fa-house"></i></span>
+                            <span class="ri-shortcut-copy"><strong>Dashboard</strong><small>Bot overview</small></span>
+                            <span class="ri-shortcut-arrow" aria-hidden="true"><i class="fas fa-chevron-right"></i></span>
+                        </a>
+                        <a class="ri-shortcut shortcut-1 nav-link" href="/commands.html" data-page="commands">
+                            <span class="ri-shortcut-icon"><i class="fas fa-terminal"></i></span>
+                            <span class="ri-shortcut-copy"><strong>Commands</strong><small>${commandCount} commands</small></span>
+                            <span class="ri-shortcut-arrow" aria-hidden="true"><i class="fas fa-chevron-right"></i></span>
+                        </a>
+                        <a class="ri-shortcut shortcut-2 nav-link" href="/events.html" data-page="events">
+                            <span class="ri-shortcut-icon"><i class="fas fa-bolt"></i></span>
+                            <span class="ri-shortcut-copy"><strong>Events</strong><small>${eventCount} events</small></span>
+                            <span class="ri-shortcut-arrow" aria-hidden="true"><i class="fas fa-chevron-right"></i></span>
+                        </a>
+                        <a class="ri-shortcut shortcut-3 nav-link" href="/tokens.html" data-page="tokens">
+                            <span class="ri-shortcut-icon"><i class="fas fa-key"></i></span>
+                            <span class="ri-shortcut-copy"><strong>Bot Tokens</strong><small>Manage bot tokens</small></span>
+                            <span class="ri-shortcut-arrow" aria-hidden="true"><i class="fas fa-chevron-right"></i></span>
+                        </a>
+                    </div>
+                </section>
+
+                <section class="ri-detail-grid" aria-label="Bot details">
+                    <article class="ri-detail-card">
+                        <div class="ri-detail-heading">
+                            <span class="ri-detail-heading-icon"><i class="fas fa-sliders"></i></span>
+                            <h2>Bot settings</h2>
+                            <span class="ri-detail-caption">CONFIGURATION</span>
+                        </div>
+                        <div class="ri-settings-list">
+                            <div class="ri-setting-row"><span class="ri-setting-icon"><i class="fas fa-terminal"></i></span><span class="ri-setting-label">Prefix</span><strong>${prefix}</strong></div>
+                            <div class="ri-setting-row"><span class="ri-setting-icon"><i class="fas fa-robot"></i></span><span class="ri-setting-label">Developer</span><strong>${developer}</strong></div>
+                            <div class="ri-setting-row"><span class="ri-setting-icon"><i class="fas fa-clock"></i></span><span class="ri-setting-label">Timezone</span><strong>${timezone}</strong></div>
+                        </div>
+                    </article>
+                    <article class="ri-detail-card ri-health-card">
+                        <div class="ri-detail-heading">
+                            <span class="ri-detail-heading-icon health"><i class="fas fa-heart-pulse"></i></span>
+                            <h2>System health</h2>
+                            <span class="ri-health-summary${botHealthPercent === 100 ? '' : ' warning'}"><i class="fas ${botHealthPercent === 100 ? 'fa-check' : 'fa-triangle-exclamation'}"></i>${healthLabel}</span>
+                        </div>
+                        <div class="ri-health-row">
+                            <div class="ri-health-label"><span><i class="fas fa-robot"></i>Active bot instances</span><strong>${activeBots} / ${botCount}</strong></div>
+                            <div class="ri-health-track"><i style="width:${botHealthPercent}%"></i></div>
+                        </div>
+                        <div class="ri-health-row">
+                            <div class="ri-health-label"><span><i class="fas fa-memory"></i>Process memory</span><strong class="optimal">${memoryUsed} / ${memoryTotal}</strong></div>
+                            <div class="ri-health-track performance"><i style="width:${memoryPercent}%"></i></div>
+                        </div>
+                    </article>
+                </section>
+                <footer class="ri-footer">Esha Bot by Sifat <span>｜© 2026 ｜</span> All rights reserved.</footer>
+            `;
+
+            attachBotProfilePhoto(content.querySelector('.ri-bot-avatar'), 'ri-bot-avatar-photo');
+        }
+
+        function renderCommands(data) {
+            const content = document.getElementById('mainContent');
+            const categories = Object.keys(data.commands || {}).sort((a, b) => a.localeCompare(b));
+            const commands = categories.flatMap(category => (data.commands[category] || []).map(command => ({ ...command, category })));
+            const details = { ...pageDetails.commands, count: data.total };
+
+            content.innerHTML = `
+                ${renderHeading(details)}
+                <section class="ri-content-card" aria-label="Command library">
+                    <div class="ri-filter-row">
+                        <input id="commandSearch" type="search" placeholder="Search commands, aliases, or descriptions…" aria-label="Search commands">
+                        <select id="commandCategory" aria-label="Filter by category">
+                            <option value="">All categories</option>
+                            ${categories.map(category => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join('')}
+                        </select>
+                    </div>
+                    <p id="commandResultCount" class="ri-count-note"></p>
+                    <div id="commandResults"></div>
+                </section>
+            `;
+
+            const results = document.getElementById('commandResults');
+            const search = document.getElementById('commandSearch');
+            const categorySelect = document.getElementById('commandCategory');
+            const resultCount = document.getElementById('commandResultCount');
+
+            function paintCommands() {
+                const query = search.value.trim().toLowerCase();
+                const selectedCategory = categorySelect.value;
+                const filtered = commands.filter(command => {
+                    const text = [
+                        command.name,
+                        command.description,
+                        command.usage,
+                        command.category,
+                        ...(Array.isArray(command.aliases) ? command.aliases : [])
+                    ].join(' ').toLowerCase();
+                    return (!selectedCategory || command.category === selectedCategory) && (!query || text.includes(query));
+                });
+                resultCount.textContent = `${filtered.length} of ${commands.length} commands`;
+
+                const grouped = new Map();
+                for (const command of filtered) {
+                    if (!grouped.has(command.category)) grouped.set(command.category, []);
+                    grouped.get(command.category).push(command);
+                }
+                results.innerHTML = filtered.length ? Array.from(grouped, ([category, items]) => `
+                    <section class="ri-category-group" aria-label="${escapeHtml(category)} commands">
+                        <div class="ri-category-heading">
+                            <h2><i class="fas fa-folder-open" aria-hidden="true"></i>${escapeHtml(category)}</h2>
+                            <span>${items.length} ${items.length === 1 ? 'command' : 'commands'}</span>
+                        </div>
+                        <div class="ri-command-grid">
+                            ${items.map(command => `
+                                <article class="ri-command-card">
+                                    <div class="ri-command-card-top">
+                                        <h3>${escapeHtml(command.name)}</h3>
+                                        ${Number(command.cooldown) > 0 ? `<span class="ri-kind-pill peach">${Number(command.cooldown)}s cooldown</span>` : ''}
+                                    </div>
+                                    <p>${escapeHtml(command.description || 'No description')}</p>
+                                    <code class="ri-command-usage">${escapeHtml(command.usage || '')}</code>
+                                    ${Array.isArray(command.aliases) && command.aliases.length ? `
+                                        <div class="ri-chip-row" aria-label="Aliases">
+                                            ${command.aliases.map(alias => `<span class="ri-chip">${escapeHtml(alias)}</span>`).join('')}
+                                        </div>
+                                    ` : ''}
+                                </article>
+                            `).join('')}
+                        </div>
+                    </section>
+                `).join('') : `
+                    <div class="ri-empty-state">
+                        <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+                        <h2>No commands found</h2>
+                        <p>Try another search or choose a different category.</p>
+                    </div>
+                `;
+            }
+
+            search.addEventListener('input', paintCommands);
+            categorySelect.addEventListener('change', paintCommands);
+            paintCommands();
+        }
+
+        function renderEvents(data) {
+            const content = document.getElementById('mainContent');
+            const events = Array.isArray(data.events) ? data.events : [];
+            content.innerHTML = `
+                ${renderHeading({ ...pageDetails.events, count: data.total })}
+                <section class="ri-content-card" aria-label="Event handlers">
+                    <div class="ri-filter-row" style="grid-template-columns:minmax(0,1fr)">
+                        <input id="eventSearch" type="search" placeholder="Search event handlers…" aria-label="Search events">
+                    </div>
+                    <p id="eventResultCount" class="ri-count-note"></p>
+                    <div id="eventResults" class="ri-event-grid"></div>
+                </section>
+            `;
+
+            const search = document.getElementById('eventSearch');
+            const results = document.getElementById('eventResults');
+            const resultCount = document.getElementById('eventResultCount');
+            function paintEvents() {
+                const query = search.value.trim().toLowerCase();
+                const filtered = events.filter(event =>
+                    `${event.name || ''} ${event.description || ''} ${event.type || ''}`.toLowerCase().includes(query)
+                );
+                resultCount.textContent = `${filtered.length} of ${events.length} event handlers`;
+                results.innerHTML = filtered.length ? filtered.map(event => `
+                    <article class="ri-event-card">
+                        <div class="ri-event-card-top">
+                            <span class="ri-event-icon" aria-hidden="true"><i class="fas fa-bolt"></i></span>
+                            <h3>${escapeHtml(event.name || 'Unnamed event')}</h3>
+                        </div>
+                        <p>${escapeHtml(event.description || 'No description')}</p>
+                        <span class="ri-kind-pill">${escapeHtml(event.type || 'message')}</span>
+                    </article>
+                `).join('') : `
+                    <div class="ri-empty-state">
+                        <i class="fas fa-bolt" aria-hidden="true"></i>
+                        <h2>No event handlers found</h2>
+                        <p>Try a different search term.</p>
+                    </div>
+                `;
+            }
+            search.addEventListener('input', paintEvents);
+            paintEvents();
+        }
+
+        let currentTokens = [];
+
+        function showTokenGate(passwordConfigured, notice = '') {
+            const content = document.getElementById('mainContent');
+            content.innerHTML = `
+                ${renderHeading(pageDetails.tokens)}
+                <section class="ri-content-card ri-token-gate">
+                    <div class="ri-detail-heading">
+                        <span class="ri-detail-heading-icon"><i class="fas fa-lock" aria-hidden="true"></i></span>
+                        <h2>Bot token access</h2>
+                    </div>
+                    <p class="ri-count-note">Only this token-management section is password protected. The dashboard, commands, and events remain available without signing in.</p>
+                    ${passwordConfigured ? `
+                        <form id="tokenAccessForm" class="ri-inline-form">
+                            <label class="ri-count-note" for="tokenManagementPassword">Dashboard password</label>
+                            <div class="ri-form-row">
+                                <input class="ri-field" id="tokenManagementPassword" name="password" type="password" autocomplete="current-password" placeholder="Enter the token access password" required>
+                                <button id="tokenAccessSubmit" class="ri-button primary" type="submit"><i class="fas fa-unlock" aria-hidden="true"></i>Unlock tokens</button>
+                            </div>
+                            <p id="tokenAccessError" class="ri-login-error" role="alert" hidden></p>
+                        </form>
+                    ` : `
+                        <div class="ri-login-error" role="status">Token access is not configured yet. Set dashboardPass in settings.json, then restart the bot.</div>
+                    `}
+                </section>
+            `;
+
+            const form = document.getElementById('tokenAccessForm');
+            form?.addEventListener('submit', async event => {
+                event.preventDefault();
+                const errorElement = document.getElementById('tokenAccessError');
+                const submit = document.getElementById('tokenAccessSubmit');
+                errorElement.hidden = true;
+                submit.disabled = true;
+                try {
+                    await requestJson('/api/tokens/authenticate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ password: document.getElementById('tokenManagementPassword').value })
+                    });
+                    await renderTokens();
+                } catch (error) {
+                    errorElement.textContent = error.message;
+                    errorElement.hidden = false;
+                } finally {
+                    submit.disabled = false;
+                }
+            });
+            if (notice) {
+                const errorElement = document.getElementById('tokenAccessError');
+                if (errorElement) {
+                    errorElement.textContent = notice;
+                    errorElement.hidden = false;
+                }
+            }
+        }
+
+        async function renderTokens() {
+            const content = document.getElementById('mainContent');
+            content.innerHTML = '<div class="ri-content-card">Loading bot instances…</div>';
+            try {
+                const data = await requestJson('/api/tokens');
+                currentTokens = Array.isArray(data.tokens) ? data.tokens : [];
+                const isAuthorized = data.isAuthorized === true;
+                content.innerHTML = `
+                    ${renderHeading({ ...pageDetails.tokens, count: currentTokens.length })}
+                    <section class="ri-content-stack">
+                        <div class="ri-content-card">
+                            <div class="ri-section-heading">
+                                <div>
+                                    <p class="ri-eyebrow">CONNECTED ACCOUNTS</p>
+                                    <h2>Bot instances</h2>
+                                </div>
+                                <div class="ri-page-actions">
+                                    <button id="lockTokenManagement" class="ri-button" type="button"><i class="fas fa-lock" aria-hidden="true"></i>Lock tokens</button>
+                                    ${isAuthorized ? '<button id="showAddToken" class="ri-button primary" type="button"><i class="fas fa-plus" aria-hidden="true"></i>Add bot</button>' : ''}
+                                </div>
+                            </div>
+                            ${isAuthorized ? `
+                                <form id="addTokenForm" class="ri-inline-form hidden" autocomplete="off">
+                                    <label class="ri-count-note" for="newToken">Telegram bot token from <a href="https://t.me/botfather" target="_blank" rel="noopener noreferrer">@BotFather</a></label>
+                                    <div class="ri-form-row">
+                                        <input class="ri-field" id="newToken" name="token" type="password" autocomplete="new-password" placeholder="Paste bot token" required>
+                                        <button id="addTokenSubmit" class="ri-button primary" type="submit"><i class="fas fa-check" aria-hidden="true"></i>Add token</button>
+                                        <button id="cancelAddToken" class="ri-button" type="button">Cancel</button>
+                                    </div>
+                                </form>
+                            ` : ''}
+                            <div class="ri-content-stack" style="margin-top:14px">
+                                ${currentTokens.length ? currentTokens.map((token, index) => `
+                                    <article class="ri-token-card">
+                                        <div class="ri-token-card-top">
+                                            <div class="ri-event-card-top">
+                                                <span class="ri-token-avatar">
+                                                    ${token.avatarUrl ? `<img src="${escapeHtml(token.avatarUrl)}" alt="" loading="lazy" onerror="this.remove()">` : '<i class="fas fa-robot" aria-hidden="true"></i>'}
+                                                </span>
+                                                <div>
+                                                    <h3>${escapeHtml(token.botName || `Bot Instance ${index + 1}`)}</h3>
+                                                    <span class="ri-kind-pill"><i class="fas fa-circle" aria-hidden="true"></i>Connected</span>
+                                                </div>
+                                            </div>
+                                            <span class="ri-count-note">Instance ${index + 1}</span>
+                                        </div>
+                                        <div class="ri-token-summary">
+                                            <span class="ri-count-note">Masked API token</span>
+                                            <code class="ri-token-secret">${escapeHtml(token.token || 'Unavailable')}</code>
+                                        </div>
+                                        <div class="ri-token-actions">
+                                            <button class="ri-button js-token-details" type="button" data-index="${index}">
+                                                <i class="fas fa-circle-info" aria-hidden="true"></i>Details
+                                            </button>
+                                            ${isAuthorized && token.fullToken ? `
+                                                <button class="ri-button js-copy-token" type="button" data-index="${index}">
+                                                    <i class="fas fa-copy" aria-hidden="true"></i>Copy full token
+                                                </button>
+                                                <button class="ri-button danger js-delete-token" type="button" data-index="${index}">
+                                                    <i class="fas fa-trash" aria-hidden="true"></i>Remove bot
+                                                </button>
+                                            ` : ''}
+                                        </div>
+                                    </article>
+                                `).join('') : `
+                                    <div class="ri-empty-state">
+                                        <i class="fas fa-robot" aria-hidden="true"></i>
+                                        <h2>No bot tokens connected</h2>
+                                        <p>Add a Telegram bot token to start managing an instance.</p>
+                                    </div>
+                                `}
+                            </div>
+                        </div>
+                        <aside class="ri-content-card">
+                            <div class="ri-detail-heading">
+                                <span class="ri-detail-heading-icon"><i class="fas fa-shield-halved" aria-hidden="true"></i></span>
+                                <h2>Token safety</h2>
+                            </div>
+                            <p class="ri-count-note">Tokens are shown in masked form by default. Never share a full bot token or commit it to a public repository. Bot profile photos are served through this dashboard, not a Telegram URL containing the token.</p>
+                        </aside>
+                    </section>
+                `;
+
+                document.getElementById('showAddToken')?.addEventListener('click', () => {
+                    const form = document.getElementById('addTokenForm');
+                    form.classList.remove('hidden');
+                    document.getElementById('newToken').focus();
+                });
+                document.getElementById('lockTokenManagement')?.addEventListener('click', async () => {
+                    try {
+                        await requestJson('/api/tokens/lock', { method: 'POST' });
+                        currentTokens = [];
+                        showTokenGate(true);
+                    } catch (error) {
+                        showNotification(error.message);
+                    }
+                });
+                document.getElementById('cancelAddToken')?.addEventListener('click', () => {
+                    document.getElementById('addTokenForm').reset();
+                    document.getElementById('addTokenForm').classList.add('hidden');
+                });
+                document.getElementById('addTokenForm')?.addEventListener('submit', addToken);
+                content.querySelectorAll('.js-copy-token').forEach(button => {
+                    button.addEventListener('click', () => copyToken(Number(button.dataset.index)));
+                });
+                content.querySelectorAll('.js-token-details').forEach(button => {
+                    button.addEventListener('click', () => showTokenDetails(Number(button.dataset.index)));
+                });
+                content.querySelectorAll('.js-delete-token').forEach(button => {
+                    button.addEventListener('click', () => deleteToken(Number(button.dataset.index)));
+                });
+            } catch (error) {
+                if (error.status === 401) {
+                    const mode = await requestJson('/api/tokens/auth-status').catch(() => ({ passwordConfigured: false }));
+                    showTokenGate(mode.passwordConfigured === true, error.message);
+                } else {
+                    content.innerHTML = `<div class="ri-load-error" role="alert">${escapeHtml(error.message)}</div>`;
+                }
+            }
+        }
+
+        async function addToken(event) {
+            event.preventDefault();
+            const input = document.getElementById('newToken');
+            const token = input.value.trim();
+            if (!/^\d+:[A-Za-z0-9_-]+$/.test(token)) {
+                showNotification('Enter a valid Telegram bot token.');
+                input.focus();
+                return;
+            }
+            const submit = document.getElementById('addTokenSubmit');
+            submit.disabled = true;
+            try {
+                const data = await requestJson('/api/tokens', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token })
+                });
+                showNotification(data.message || 'Bot token added.');
+                await renderTokens();
+            } catch (error) {
+                showNotification(error.message);
+            } finally {
+                submit.disabled = false;
+            }
+        }
+
+        async function deleteToken(index) {
+            const bot = currentTokens[index];
+            if (!bot || !window.confirm(`Remove ${bot.botName || `bot instance ${index + 1}`}? The bot will stop immediately.`)) return;
+            try {
+                const data = await requestJson(`/api/tokens/${index}`, { method: 'DELETE' });
+                showNotification(data.message || 'Bot token removed.');
+                await renderTokens();
+            } catch (error) {
+                showNotification(error.message);
+            }
+        }
+
+        async function copyToken(index) {
+            const token = currentTokens[index]?.fullToken;
+            if (!token) return;
+            try {
+                await navigator.clipboard.writeText(token);
+                showNotification('Full token copied to clipboard.');
+            } catch (error) {
+                showNotification('Clipboard access was blocked by the browser.');
+            }
+        }
+
+        function showTokenDetails(index) {
+            const bot = currentTokens[index];
+            if (!bot) return;
+            const backdrop = document.createElement('div');
+            backdrop.className = 'ri-modal-backdrop';
+            backdrop.setAttribute('role', 'presentation');
+            const modal = document.createElement('section');
+            modal.className = 'ri-modal';
+            modal.setAttribute('role', 'dialog');
+            modal.setAttribute('aria-modal', 'true');
+            modal.setAttribute('aria-labelledby', 'tokenModalTitle');
+            const title = document.createElement('h2');
+            title.id = 'tokenModalTitle';
+            title.textContent = bot.botName || `Bot Instance ${index + 1}`;
+            const description = document.createElement('p');
+            description.textContent = `Telegram bot instance ${index + 1}. Its authentication token remains masked unless you choose to copy it.`;
+            const close = document.createElement('button');
+            close.className = 'ri-button primary';
+            close.type = 'button';
+            close.textContent = 'Close';
+            close.addEventListener('click', () => backdrop.remove());
+            backdrop.addEventListener('click', event => {
+                if (event.target === backdrop) backdrop.remove();
+            });
+            modal.append(title, description, close);
+            backdrop.append(modal);
+            document.body.append(backdrop);
+            close.focus();
+        }
+
+        async function initializeManagementPage() {
+            const loader = document.getElementById('loader');
+            try {
+                if (!pageDetails[page]) throw new Error('This dashboard page is not available.');
+                updateActiveNav(page);
+                if (page === 'dashboard') {
+                    await loadBotData();
+                    await renderDashboard();
+                    let uptimeSeconds = Number(botData?.uptime?.seconds) || 0;
+                    const uptimeDisplay = document.getElementById('uptimeDisplay');
+                    if (uptimeDisplay) {
+                        window.setInterval(() => {
+                            uptimeSeconds += 1;
+                            uptimeDisplay.textContent = convertTime(uptimeSeconds * 1000);
+                        }, 1000);
+                    }
+                } else if (page === 'commands') {
+                    const data = await requestJson('/api/commands');
+                    renderCommands(data);
+                } else if (page === 'events') {
+                    const data = await requestJson('/api/events');
+                    renderEvents(data);
+                } else {
+                    const access = await requestJson('/api/tokens/auth-status');
+                    if (access.authorized) await renderTokens();
+                    else showTokenGate(access.passwordConfigured === true);
+                }
+            } catch (error) {
+                document.getElementById('mainContent').innerHTML =
+                    `<div class="ri-load-error" role="alert">${escapeHtml(error.message || 'Could not load this page.')}</div>`;
+            } finally {
+                if (loader) loader.hidden = true;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', initializeManagementPage);
+    </script>
+</body>
+</html>

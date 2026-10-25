@@ -1,0 +1,14 @@
+.local
+.cache
+.config
+.pythonlibs
+.upm
+node_modules
+data
+core/backups
+coverage
+.env
+.env.*
+package-lock.json
+npm-debug.log*
+*.log

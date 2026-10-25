@@ -1,0 +1,77 @@
+{
+  "bots": {
+    "tokenEnv": "TELEGRAM_BOT_TOKEN",
+    "tokens": [
+      "8874414285:AAFtIFQHNzySQckyNZHyvGgcU4647QlAudA"
+    ]
+  },
+  "devMode": true,
+  "dashboardPass": "M@ybes1f4t",
+  "devOnly": false,
+  "timeZone": "Asia/Dhaka",
+  "secret": "h4x_s1fu",
+  "prefix": ".",
+  "noPrefix": "adminOnly",
+  "developer": "FX_SIF4T",
+  "devID": [
+    "8438269386"
+  ],
+  "devUsername": [
+    "FX_SIFAT"
+  ],
+  "admin": {
+    "uid": [
+      "8438269386"
+    ]
+  },
+  "vip": {
+    "uid": [
+      "7807647986"
+    ]
+  },
+  "feeCollectorUID": "8438269386",
+  "commandMoney": {},
+  "database": {
+    "type": "sqlite",
+    "path": "data/bot.sqlite",
+    "name": "telegram_bot",
+    "uriEnv": "MONGODB_URI",
+    "uri": ""
+  },
+  "reactionUnsend": {
+    "enabled": false,
+    "adminOnly": true,
+    "emoji": [
+      "🍌"
+    ]
+  },
+  "github": {
+    "enabled": false,
+    "repo": "https://github.com/FX-SIF4T/TELEGRAM-BOT.git",
+    "branch": "main",
+    "authorName": "SIFAT",
+    "authorEmail": "",
+    "tokenEnv": "GITHUB_TOKEN",
+    "autopush": {
+      "cmd": false,
+      "event": false
+    }
+  },
+  "updater": {
+    "repository": "https://github.com/FX-SIF4T/TELEGRAM-BOT.git",
+    "branch": "main",
+    "preserve": [
+      "settings.json"
+    ],
+    "backup": "core/backups"
+  },
+  "logging": {
+    "esha": "esha",
+    "load": "load",
+    "dev": "dev",
+    "err": "err",
+    "warn": "warn",
+    "cmd": "commands",
+    "evnts": "events"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "maintenance_mode": "🔧 *Maintenance Mode*\n\nThe bot is currently under maintenance.\nOnly bot owners can use commands at this time.\n\nPlease try again later.",
+  "startup_complete": "*🤖  Esha Telegram Bot Startup Complete*\n• *Instances:* {{instances}}\n• *Time:* {{time}} ({{timezone}})\n• *Status:* All systems operational ✅",
+  "bot_connected": "🎉 {{botName}} has been successfully connected!\n\nThank you for inviting me to {{groupName}}. Before you use this bot, please consider granting me admin privileges.",
+  "group_member_welcome": "Hi {{memberName}}, welcome to {{groupName}}!\nPlease enjoy your time here! 🥳♥\n\nYou are {{memberCount}}th member of this group.",
+  "group_member_left": "{{memberName}} has left the group. We'll miss you!",
+  "group_member_removed": "Goodbye, {{memberName}}. You were removed by an admin."
+}
