@@ -3,7 +3,7 @@ import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import { Transform } from 'node:stream';
 
-const API_BASE = 'https://fxs-media-downloader-fsgdxbdny-s1-f4-t.vercel.app';
+const API_BASE = 'https://fxs-media-downloader.vercel.app';
 const API_JSON_LIMIT = 512 * 1024;
 const MAX_MEDIA_BYTES = 45 * 1024 * 1024;
 const API_ATTEMPTS = 3;
