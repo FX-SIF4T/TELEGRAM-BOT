@@ -3,7 +3,7 @@ import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import { Transform } from 'node:stream';
 
-const API_BASE = 'https://fxs-media-downloader-fsgdxbdny-s1-f4-t.vercel.app/api';
+const API_BASE = 'https://fxs-media-downloader-fsgdxbdny-s1-f4-t.vercel.app';
 const API_JSON_LIMIT = 512 * 1024;
 const MAX_MEDIA_BYTES = 45 * 1024 * 1024;
 const API_ATTEMPTS = 3;
@@ -387,7 +387,7 @@ function wait(milliseconds) {
 }
 
 async function downloadWithApi(sourceUrl, platform, response) {
-  const apiUrl = new URL(`${API_BASE}/api/download/${platform}`);
+  const apiUrl = new URL(`${API_BASE}/api/${platform}`);
   apiUrl.searchParams.set('url', sourceUrl);
 
   for (let attempt = 0; attempt < API_ATTEMPTS; attempt += 1) {
