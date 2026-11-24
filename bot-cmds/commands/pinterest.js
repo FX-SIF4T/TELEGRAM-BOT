@@ -17,8 +17,8 @@ const pendingVideos = new Map();
 
 export const meta = {
   name: "pinterest",
-  aliases: ["pin", "pintrest"],
-  version: "2.0.0",
+  aliases: ["pint", "pintrest"],
+  version: "1.0.0",
   author: "𝐒𝐈𝐅𝐀𝐓",
   description: "Search and download Pinterest images and videos.",
   guide: "[query] [-limit] | -v [query] [-limit] | Reply to results with a number",
