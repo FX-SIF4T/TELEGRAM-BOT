@@ -7,7 +7,7 @@ import os from "os";
 
 const API = "https://image-edit-api-3olu.onrender.com";
 const API_KEY = process.env.IMAGE_EDIT_API_KEY || "firexsifu";
-const CACHE = path.join(os.tmpdir(), "clipsnap-edit");
+const CACHE = path.join(os.tmpdir(), "clipsnap-cache");
 
 const HEADERS = {
   "X-API-Key": API_KEY
@@ -16,10 +16,10 @@ const HEADERS = {
 export const meta = {
   name: "edit",
   aliases: ["ai-edit", "clipsnap"],
-  version: "1.0.0",
+  version: "3.1.0",
   author: "𝐒𝐈𝐅𝐀𝐓",
   description: "AI image editing using ClipSnap API.",
-  guide: "[prompt] | models [fast/high-quality] | --mode fast/high_quality",
+  guide: "[prompt] | models | models fast | models high-quality",
   cooldown: 5,
   prefix: "both",
   type: "anyone",
@@ -27,19 +27,6 @@ export const meta = {
 };
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-
-function parseError(error) {
-  const data = error.response?.data;
-
-  if (data) {
-    try {
-      const parsed = JSON.parse(Buffer.from(data).toString());
-      return parsed.detail || parsed.message || parsed.error || error.message;
-    } catch {}
-  }
-
-  return error.message || "Something went wrong.";
-}
 
 function getImage(msg) {
   if (!msg) return null;
@@ -97,26 +84,45 @@ async function downloadTelegramImage(bot, image) {
   const res = await axios.get(url, {
     responseType: "arraybuffer",
     timeout: 60000,
-    maxContentLength: 20 * 1024 * 1024
+    maxContentLength: 20 * 1024 * 1024,
+    maxBodyLength: 20 * 1024 * 1024
   });
 
-  const mime = res.headers["content-type"] || "image/jpeg";
+  const buffer = Buffer.from(res.data);
 
-  if (!mime.startsWith("image/")) {
-    throw new Error("Invalid Telegram image.");
+  if (!buffer.length) {
+    throw new Error("Telegram returned an empty image.");
   }
 
-  return {
-    buffer: Buffer.from(res.data),
-    mime,
-    ext: mime.includes("png")
-      ? "png"
-      : mime.includes("webp")
-        ? "webp"
-        : "jpg"
-  };
-}
+  let mime;
+  let ext;
 
+  if (
+    buffer[0] === 0xFF &&
+    buffer[1] === 0xD8 &&
+    buffer[2] === 0xFF
+  ) {
+    mime = "image/jpeg";
+    ext = "jpg";
+  } else if (
+    buffer.subarray(0, 8).equals(
+      Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
+    )
+  ) {
+    mime = "image/png";
+    ext = "png";
+  } else if (
+    buffer.toString("ascii", 0, 4) === "RIFF" &&
+    buffer.toString("ascii", 8, 12) === "WEBP"
+  ) {
+    mime = "image/webp";
+    ext = "webp";
+  } else {
+    throw new Error("Downloaded file is not a supported image.");
+  }
+
+  return { buffer, mime, ext };
+}
 
 async function downloadImageUrl(url) {
   const res = await axios.get(url, {
@@ -125,38 +131,75 @@ async function downloadImageUrl(url) {
     maxContentLength: 30 * 1024 * 1024
   });
 
-  const mime = res.headers["content-type"] || "image/jpeg";
+  const buffer = Buffer.from(res.data);
 
-  if (!mime.startsWith("image/")) {
-    throw new Error("API result URL did not return an image.");
+  if (!buffer.length) {
+    throw new Error("Image URL returned an empty file.");
   }
 
-  return {
-    buffer: Buffer.from(res.data),
-    mime
-  };
+  return detectImage(buffer);
 }
 
+function detectImage(buffer) {
+  let mime;
+  let ext;
 
-async function extractImage(data, contentType) {
   if (
-    contentType?.startsWith("image/") ||
-    contentType?.includes("octet-stream")
+    buffer[0] === 0xFF &&
+    buffer[1] === 0xD8 &&
+    buffer[2] === 0xFF
   ) {
-    return Buffer.from(data);
+    mime = "image/jpeg";
+    ext = "jpg";
+  } else if (
+    buffer.subarray(0, 8).equals(
+      Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
+    )
+  ) {
+    mime = "image/png";
+    ext = "png";
+  } else if (
+    buffer.toString("ascii", 0, 4) === "RIFF" &&
+    buffer.toString("ascii", 8, 12) === "WEBP"
+  ) {
+    mime = "image/webp";
+    ext = "webp";
+  } else {
+    throw new Error("Invalid image data received.");
+  }
+
+  return { buffer, mime, ext };
+}
+
+async function extractImage(data, contentType = "") {
+  const buffer = Buffer.from(data);
+
+  if (
+    contentType.toLowerCase().startsWith("image/") ||
+    contentType.toLowerCase().includes("octet-stream")
+  ) {
+    return detectImage(buffer);
   }
 
   let json;
 
   try {
-    json = JSON.parse(Buffer.from(data).toString("utf8"));
+    json = JSON.parse(buffer.toString("utf8"));
   } catch {
-    throw new Error("API returned an unsupported image response.");
+    throw new Error("API returned an invalid response.");
   }
 
-  
   const findImage = obj => {
     if (!obj || typeof obj !== "object") return null;
+
+    const base64 =
+      obj.image_base64 ||
+      obj.base64 ||
+      (typeof obj.image === "string" ? obj.image : null);
+
+    if (typeof base64 === "string" && base64.length > 100) {
+      return { base64 };
+    }
 
     const url =
       obj.image_url ||
@@ -164,15 +207,6 @@ async function extractImage(data, contentType) {
       obj.result_url ||
       obj.imageUrl ||
       obj.url;
-
-    const base64 =
-      obj.image_base64 ||
-      obj.base64 ||
-      obj.image;
-
-    if (typeof base64 === "string" && base64.length > 100) {
-      return { base64 };
-    }
 
     if (typeof url === "string" && /^https?:\/\//i.test(url)) {
       return { url };
@@ -193,28 +227,25 @@ async function extractImage(data, contentType) {
       /^data:image\/[^;]+;base64,/i,
       ""
     );
-    return Buffer.from(base64, "base64");
+
+    return detectImage(Buffer.from(base64, "base64"));
   }
 
   if (found?.url) {
-    const result = await downloadImageUrl(found.url);
-    return result.buffer;
+    return downloadImageUrl(found.url);
   }
 
   throw new Error(
     json.detail ||
     json.message ||
     json.error ||
-    "No generated image found in API response."
+    "No generated image found."
   );
 }
 
-
 async function waitForJob(jobId) {
-  const maxAttempts = 100;
-
-  for (let i = 0; i < maxAttempts; i++) {
-    const statusRes = await axios.get(
+  for (let i = 0; i < 100; i++) {
+    const res = await axios.get(
       `${API}/api/v1/jobs/${encodeURIComponent(jobId)}`,
       {
         headers: HEADERS,
@@ -222,13 +253,15 @@ async function waitForJob(jobId) {
       }
     );
 
-    const job = statusRes.data || {};
+    const job = res.data || {};
     const status = String(
       job.status || job.state || ""
     ).toLowerCase();
 
-    if (["completed", "complete", "success", "succeeded", "done"].includes(status)) {
-      const resultRes = await axios.get(
+    if (
+      ["completed", "complete", "success", "succeeded", "done"].includes(status)
+    ) {
+      const result = await axios.get(
         `${API}/api/v1/jobs/${encodeURIComponent(jobId)}/result`,
         {
           headers: HEADERS,
@@ -239,14 +272,14 @@ async function waitForJob(jobId) {
       );
 
       return extractImage(
-        resultRes.data,
-        resultRes.headers["content-type"] || ""
+        result.data,
+        result.headers["content-type"] || ""
       );
     }
 
     if (["failed", "error", "cancelled", "canceled"].includes(status)) {
       throw new Error(
-        job.error || job.message || "Image editing job failed."
+        job.error || job.message || "Image editing failed."
       );
     }
 
@@ -256,50 +289,44 @@ async function waitForJob(jobId) {
   throw new Error("Image generation timed out.");
 }
 
-
 async function showModels(response, type = "") {
-  const endpoint = type === "fast"
-    ? "/api/v1/models/fast"
-    : type === "high-quality" || type === "high_quality"
-      ? "/api/v1/models/high-quality"
-      : "/api/v1/models";
+  const endpoint =
+    type === "fast"
+      ? "/api/v1/models/fast"
+      : ["high-quality", "high_quality"].includes(type)
+        ? "/api/v1/models/high-quality"
+        : "/api/v1/models";
 
   const res = await axios.get(`${API}${endpoint}`, {
     headers: HEADERS,
     timeout: 60000
   });
 
-  const data = res.data;
+  const data = res.data || {};
   const models = data.models || data.data || data;
 
   let output = "╭━━━〔 CLIPSNAP AI MODELS 〕\n";
 
+  const addModel = (item, index) => {
+    const name = typeof item === "string"
+      ? item
+      : item.name || item.id || "Unknown";
+
+    const available = typeof item === "string" || item.available !== false;
+
+    output += `┃ ${index + 1}. ${name} ${available ? "✅" : "❌"}\n`;
+  };
+
   if (Array.isArray(models)) {
-    models.forEach((item, index) => {
-      const name = typeof item === "string"
-        ? item
-        : item.name || item.id || "Unknown";
-
-      const available = typeof item === "string" || item.available !== false;
-
-      output += `┃ ${index + 1}. ${name} ${available ? "✅" : "❌"}\n`;
-    });
-  } else if (typeof models === "object" && models !== null) {
+    models.forEach(addModel);
+  } else if (models && typeof models === "object") {
     for (const [category, items] of Object.entries(models)) {
       output += `\n┣━━〔 ${category.toUpperCase()} 〕\n`;
 
       if (Array.isArray(items)) {
-        items.forEach((item, index) => {
-          const name = typeof item === "string"
-            ? item
-            : item.name || item.id || "Unknown";
-
-          output += `┃ ${index + 1}. ${name}\n`;
-        });
+        items.forEach(addModel);
       }
     }
-  } else {
-    output += "┃ No models found.\n";
   }
 
   output += "\n╰━━〔 POWERED BY SIFAT 〕";
@@ -317,12 +344,11 @@ export async function onStart({
   let output;
   let processing;
 
-  const targetChat = chatId ?? msg.chat.id;
+  const targetChat = chatId ?? msg?.chat?.id;
 
   try {
     const sub = String(args[0] || "").toLowerCase();
 
-    // HELP
     if (["help", "-h", "--help"].includes(sub)) {
       return response.reply(
         "╭━━━〔 CLIPSNAP AI 〕\n" +
@@ -343,19 +369,20 @@ export async function onStart({
         "┃ --mode high_quality\n" +
         "┃\n" +
         "┣━━━〔 EXAMPLES 〕\n" +
-        "┃ Reply image: edit Make it cinematic\n" +
-        "┃ edit Remove background --mode fast\n" +
+        "┃ Reply image: edit Remove text\n" +
+        "┃ edit Make it cinematic --mode fast\n" +
         "┃ edit Make realistic --mode high_quality\n" +
-        "┃ edit Beautiful portrait --model \"Nano Banana Pro\"\n" +
+        "┃ edit Make beautiful --model \"Nano Banana Pro\"\n" +
         "┃\n" +
         "╰━━━〔 POWERED BY SIFAT 〕"
       );
     }
 
-    
     if (sub === "models") {
-      const type = String(args[1] || "").toLowerCase();
-      return await showModels(response, type);
+      return await showModels(
+        response,
+        String(args[1] || "").toLowerCase()
+      );
     }
 
     const {
@@ -370,12 +397,13 @@ export async function onStart({
     }
 
     if (!["fast", "high_quality"].includes(mode)) {
-      return response.reply("❌ Invalid mode. Use fast or high_quality.");
+      return response.reply(
+        "❌ Invalid mode. Use fast or high_quality."
+      );
     }
 
-  
     const image =
-      getImage(msg.reply_to_message) ||
+      getImage(msg?.reply_to_message) ||
       getImage(msg);
 
     if (!image && !imageUrl) {
@@ -385,12 +413,11 @@ export async function onStart({
     }
 
     processing = await response.reply(
-      "⏳ AI is editing your image...\nPlease wait."
+      "⏳ ClipSnap AI is editing your image...\nPlease wait."
     );
 
     await fs.ensureDir(CACHE);
 
-  
     const form = new FormData();
 
     form.append("prompt", prompt);
@@ -408,7 +435,6 @@ export async function onStart({
       form.append("image_url", imageUrl);
     }
 
-
     const result = await axios.post(
       `${API}/api/v1/edit`,
       form,
@@ -425,51 +451,47 @@ export async function onStart({
     );
 
     const contentType = result.headers["content-type"] || "";
+    const body = Buffer.from(result.data);
 
-    let imageBuffer;
+    let generated;
 
-    if (contentType.startsWith("image/") ||
-        contentType.includes("octet-stream")) {
-      imageBuffer = Buffer.from(result.data);
+    if (
+      contentType.toLowerCase().startsWith("image/") ||
+      contentType.toLowerCase().includes("octet-stream")
+    ) {
+      generated = detectImage(body);
     } else {
-    
       let json = {};
 
       try {
-        json = JSON.parse(Buffer.from(result.data).toString("utf8"));
+        json = JSON.parse(body.toString("utf8"));
       } catch {}
 
       const jobId = json.job_id || json.id;
 
       if (jobId) {
-        imageBuffer = await waitForJob(jobId);
+        generated = await waitForJob(jobId);
       } else {
-        imageBuffer = await extractImage(result.data, contentType);
+        generated = await extractImage(body, contentType);
       }
     }
 
-    if (!imageBuffer?.length) {
-      throw new Error("Generated image is empty.");
-    }
-
-  
     output = path.join(
       CACHE,
-      `edit-${Date.now()}.jpg`
+      `edit-${Date.now()}.${generated.ext}`
     );
 
-    await fs.writeFile(output, imageBuffer);
+    await fs.writeFile(output, generated.buffer);
 
-  
     await bot.sendPhoto(
       targetChat,
       fs.createReadStream(output),
       {
         reply_to_message_id: msg.message_id,
         caption:
-          "╭━━━〔AI EDITOR〕\n" +
+          "╭━━━〔 CLIPSNAP AI 〕\n" +
           "┃\n" +
-          "┃ Image edited successfully!\n" +
+          "┃ ✅ Image edited successfully!\n" +
           `┃ 🎨 Mode: ${mode}\n` +
           `┃ 🤖 Model: ${model}\n` +
           "┃ 👑 Powered by SIFAT\n" +
@@ -478,7 +500,7 @@ export async function onStart({
     );
 
   } catch (error) {
-    return response.reply(`❌ ${parseError(error)}`);
+    return response.reply(`❌ ${error.message || "Something went wrong."}`);
 
   } finally {
     if (output) {
